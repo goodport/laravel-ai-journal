@@ -54,6 +54,18 @@ final class ContextReader
         return $this->redactor->redact($this->normalizer->normalizeArray($tags));
     }
 
+    public function fresh(): bool
+    {
+        return Context::get($this->config->freshKey) === true;
+    }
+
+    public function replayTtl(): ?int
+    {
+        $value = Context::get($this->config->ttlKey);
+
+        return is_int($value) && $value >= 0 ? $value : null;
+    }
+
     /**
      * Context included in the fingerprint. It is not redacted.
      *

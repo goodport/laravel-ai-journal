@@ -20,6 +20,8 @@ final readonly class JournalConfig
         public string $traceKey,
         public string $scopeKey,
         public string $tagsKey,
+        public string $freshKey,
+        public string $ttlKey,
         public bool $replayEnabled,
         public int $replayTtl,
         public string $replayScope,

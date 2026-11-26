@@ -85,6 +85,8 @@ The package reads Laravel `Context`:
 - `ai.trace_id` — stored in the `trace_id` column;
 - `ai.journal.scope` — isolation scope for replay;
 - `ai.journal.tags` — arbitrary tags;
+- `ai.journal.fresh` — when `true`, bypass replay for the current call;
+- `ai.journal.ttl` — optional replay TTL override in seconds;
 - the rest of `Context::all()` — stored in `context`, when capture is enabled.
 
 ```php
@@ -95,6 +97,7 @@ Context::add([
     'ai.trace_id' => (string) Str::uuid(),
     'ai.journal.scope' => 'tenant-a',
     'ai.journal.tags' => ['feature' => 'post-moderation'],
+    'ai.journal.ttl' => 3600,
 ]);
 ```
 
@@ -109,7 +112,7 @@ Replay is disabled by default. Enable it in the config:
     'enabled' => true,
     'ttl' => 3600,
     'scope' => Goodport\AiJournal\Journal\Replay\ContextReplayScope::class,
-    'fingerprint_context' => [],
+    'fingerprint_context' => ['ai.check', 'ai.pass'],
     'allow_tools' => false,
     'first_step_only' => true,
 ],
@@ -148,11 +151,19 @@ If lookup or reconstruction fails, the provider is called normally.
 
 `scope` separates replay entries. A multi-tenant application should return the tenant key from a custom `ReplayScope` implementation, or put the tenant into `ai.journal.scope`.
 
-If several calls share the same prompt but must not reuse each other's responses, add the relevant context keys to `replay.fingerprint_context`:
+The default fingerprint context includes `ai.check` and `ai.pass`, so separate check types and second passes do not reuse each other's responses. Add more keys when the application has its own separation rules:
 
 ```php
-'fingerprint_context' => ['ai.check', 'ai.pass'],
+'fingerprint_context' => ['ai.check', 'ai.pass', 'tenant.id'],
 ```
+
+Use `ai.journal.fresh` when a single call must ignore the stored response:
+
+```php
+Context::add('ai.journal.fresh', true);
+```
+
+`ai.journal.ttl` overrides the configured TTL for the current call.
 
 ## Cost
 

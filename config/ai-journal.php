@@ -21,13 +21,15 @@ return [
         'trace' => 'ai.trace_id',
         'scope' => 'ai.journal.scope',
         'tags' => 'ai.journal.tags',
+        'fresh' => 'ai.journal.fresh',
+        'ttl' => 'ai.journal.ttl',
     ],
 
     'replay' => [
         'enabled' => true,
         'ttl' => 0,
         'scope' => ContextReplayScope::class,
-        'fingerprint_context' => [],
+        'fingerprint_context' => ['ai.check', 'ai.pass'],
         'allow_tools' => false,
         'first_step_only' => true,
     ],

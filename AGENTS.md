@@ -102,12 +102,13 @@ At step start the package reconstructs instructions and schema from the agent be
 
 - agent class, provider, model, instructions, messages, tools, schema, options;
 - `is_final_step`;
-- configured `Context` keys;
+- configured `Context` keys; the default list contains `ai.check` and `ai.pass`;
 - replay scope.
 
 `ReplayRecordedStep` only runs when:
 
-- replay is enabled and TTL is positive;
+- replay is enabled and the effective TTL is positive;
+- `ai.journal.fresh` is not `true`; the effective TTL can come from `ai.journal.ttl`;
 - response capture is enabled and no redactor is configured;
 - the step is the first step and has no tools, unless explicitly allowed;
 - the stored response has no tool calls, no pending approvals, no citations, and a replayable finish reason;

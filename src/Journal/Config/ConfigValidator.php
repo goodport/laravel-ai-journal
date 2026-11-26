@@ -69,6 +69,8 @@ final class ConfigValidator
             traceKey: $this->string('context.trace'),
             scopeKey: $this->string('context.scope'),
             tagsKey: $this->string('context.tags'),
+            freshKey: $this->string('context.fresh'),
+            ttlKey: $this->string('context.ttl'),
             replayEnabled: $this->boolean('replay.enabled'),
             replayTtl: $ttl,
             replayScope: $scope,

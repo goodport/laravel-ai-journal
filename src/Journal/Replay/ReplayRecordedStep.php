@@ -5,6 +5,7 @@ namespace Goodport\AiJournal\Journal\Replay;
 use Closure;
 use Goodport\AiJournal\Enums\StepStatus;
 use Goodport\AiJournal\Journal\Config\JournalConfig;
+use Goodport\AiJournal\Journal\Context\ContextReader;
 use Goodport\AiJournal\Journal\Recording\InvocationRecorder;
 use Goodport\AiJournal\Journal\Recording\InvocationStepRecorder;
 use Goodport\AiJournal\Models\AiInvocationStep;
@@ -16,6 +17,7 @@ final class ReplayRecordedStep
 {
     public function __construct(
         private JournalConfig $config,
+        private ContextReader $context,
         private StepPayloadFactory $payloads,
         private StepFingerprint $fingerprints,
         private StepResponseMapper $mapper,
@@ -38,7 +40,7 @@ final class ReplayRecordedStep
                 return $next($step);
             }
 
-            $source = $this->findSource($fingerprint, $this->scope->current());
+            $source = $this->findSource($fingerprint, $this->scope->current(), $this->ttl());
 
             if ($source === null || ! is_array($source->response) || ! $this->mapper->isReplaySafe($source->response)) {
                 return $next($step);
@@ -78,7 +80,11 @@ final class ReplayRecordedStep
             return false;
         }
 
-        if ($this->config->replayTtl <= 0 || ! $this->config->captureResponse || $this->config->redactor !== null) {
+        if ($this->context->fresh()) {
+            return false;
+        }
+
+        if ($this->ttl() <= 0 || ! $this->config->captureResponse || $this->config->redactor !== null) {
             return false;
         }
 
@@ -93,12 +99,17 @@ final class ReplayRecordedStep
         return true;
     }
 
-    private function findSource(string $fingerprint, ?string $scope): ?AiInvocationStep
+    private function ttl(): int
+    {
+        return $this->context->replayTtl() ?? $this->config->replayTtl;
+    }
+
+    private function findSource(string $fingerprint, ?string $scope, int $ttl): ?AiInvocationStep
     {
         return AiInvocationStep::query()
             ->where('request_fingerprint', $fingerprint)
             ->where('status', StepStatus::Succeeded->value)
-            ->where('created_at', '>=', now()->subSeconds($this->config->replayTtl))
+            ->where('created_at', '>=', now()->subSeconds($ttl))
             ->whereHas('invocation', function (Builder $query) use ($scope): void {
                 $scope === null
                     ? $query->whereNull('scope')
