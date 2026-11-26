@@ -25,4 +25,14 @@ final class ConfigTest extends TestCase
 
         $this->app->make(JournalConfig::class);
     }
+
+    public function test_hash_remote_mode_requires_a_hasher(): void
+    {
+        $this->setJournalConfig('attachments.remote.mode', 'hash');
+        $this->setJournalConfig('attachments.remote.hasher', null);
+
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->app->make(JournalConfig::class);
+    }
 }

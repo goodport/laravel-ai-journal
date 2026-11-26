@@ -59,4 +59,28 @@ final class ReplayTest extends TestCase
         $this->assertSame($sourceStep->id, $replayStep->replay_of_step_id);
         $this->assertEquals(0, $replayStep->cost);
     }
+
+    /**
+     * Replay returns before a later middleware can consume a limit or wait.
+     */
+    public function test_replay_short_circuits_later_middleware(): void
+    {
+        $sourceInvocationId = '0190b4a0-0000-7000-8000-000000000013';
+        $prompt = $this->dispatchPrompting($sourceInvocationId);
+        $this->dispatchCompletedStep($sourceInvocationId, $prompt);
+        $this->dispatchPrompted($sourceInvocationId, $prompt);
+
+        $pending = $this->pendingStep('0190b4a0-0000-7000-8000-000000000014');
+        $middleware = $this->app->make(ReplayRecordedStep::class);
+        $nextCalls = 0;
+
+        $result = $middleware->handle($pending, function () use (&$nextCalls): StepResponse {
+            $nextCalls++;
+
+            return $this->stepResponse('Provider response');
+        });
+
+        $this->assertSame(0, $nextCalls);
+        $this->assertSame('OK', $result->text);
+    }
 }

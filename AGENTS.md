@@ -24,6 +24,7 @@ config/ai-journal.php
 database/migrations/
   2026_11_26_000000_create_ai_invocations_table.php
   2026_11_26_000001_create_ai_invocation_steps_table.php
+  2026_11_26_000002_add_error_metadata_to_ai_journal_tables.php
 src/
   AiJournalServiceProvider.php
   AiJournalManager.php
@@ -37,8 +38,10 @@ src/
     AiInvocation.php
     AiInvocationStep.php
   Journal/
+    Attachments/      remote attachment hasher contract
     Config/           config value object, validator, exception
     Context/          Laravel Context reader
+    Errors/           HTTP error metadata extraction and sanitization
     Cost/             usage-to-cost calculator
     Listeners/        laravel/ai event subscriber
     Pruning/          retention service
@@ -56,7 +59,7 @@ tests/
 `ai_invocations` is one logical agent run.
 
 - `invocation_id` comes from `laravel/ai` and is unique.
-- `attempt_count` and `attempts` keep provider failover history.
+- `attempt_count` and `attempts` keep provider failover history. Attempt entries have a fixed key set including `error_code`, `http_status`, `provider_request_id`, `retry_after`, and `error_details`.
 - `status` is `pending`, `pending_approval`, `succeeded`, or `failed`.
 - `streamed` and `replayed` are summary flags.
 - `trace_id`, `scope`, `context`, and `tags` carry correlation data.
@@ -67,6 +70,7 @@ tests/
 - Unique key: `(ai_invocation_id, attempt_number, step_number)`.
 - `request_fingerprint` is a SHA-256 of the canonical request.
 - `request` is a redacted audit snapshot; `response` is the normalized raw `StepResponse`.
+- invocations and steps keep normalized HTTP error metadata; attempts keep the same keys in JSON.
 - `cost` is zero for a replayed step.
 - `replay_of_step_id` links a replay to its source.
 
@@ -124,13 +128,16 @@ The replay step is recorded with `status = replayed`, `cost = 0`, and a source l
 
 `Redactor` and `ReplayScope` are container contracts. The default redactor is a no-op; the default scope reads its value from `Context`.
 
+Remote attachment replay is controlled by `attachments.remote.mode`: `never` (default), `hash`, or `trust`. `hash` requires a class implementing `RemoteAttachmentHasher`; a missing hasher is a configuration error. The hasher is application-owned and must enforce its own timeout, size limit, and host allowlist. If hashing fails, the attachment is unstable and replay is skipped.
+
 ## Public API
 
 - `AiJournal::invocation()`
 - `AiJournal::trace()`
+- `AiJournal::invocations()` with filters and pagination
 - `AiJournal::prune()`
 
-Models are public for application-specific query screens. The package does not include a UI or admin panel.
+Models are public for application-specific query screens. The list API selects summary columns only and does not load prompt or response payloads. The package does not include a UI or admin panel.
 
 ## Boundaries
 

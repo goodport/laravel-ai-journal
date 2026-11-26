@@ -40,6 +40,11 @@ final class FailoverTest extends TestCase
         $this->assertSame(AttemptStatus::Succeeded->value, $invocation->attempts[1]['status']);
         $this->assertSame(AttemptStatus::Failed->value, $invocation->attempts[0]['status']);
 
+        foreach (['error_code', 'http_status', 'provider_request_id', 'retry_after', 'error_details'] as $key) {
+            $this->assertArrayHasKey($key, $invocation->attempts[0]);
+            $this->assertArrayHasKey($key, $invocation->attempts[1]);
+        }
+
         $steps = AiInvocationStep::query()
             ->where('ai_invocation_id', $invocation->id)
             ->orderBy('attempt_number')

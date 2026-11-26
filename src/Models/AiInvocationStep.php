@@ -30,6 +30,9 @@ final class AiInvocationStep extends Model
             'response' => 'array',
             'usage' => 'array',
             'cost' => 'decimal:6',
+            'http_status' => 'integer',
+            'retry_after' => 'integer',
+            'error_details' => 'array',
         ];
     }
 

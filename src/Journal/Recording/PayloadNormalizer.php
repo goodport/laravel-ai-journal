@@ -6,13 +6,17 @@ use BackedEnum;
 use Closure;
 use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Http\UploadedFile as IlluminateUploadedFile;
 use JsonSerializable;
 use Laravel\Ai\Files\File;
 use Stringable;
+use Symfony\Component\HttpFoundation\File\UploadedFile as SymfonyUploadedFile;
 use UnitEnum;
 
 final class PayloadNormalizer
 {
+    public function __construct(private UploadedFileNormalizer $uploadedFiles) {}
+
     /**
      * Normalize a value into a JSON-safe representation.
      */
@@ -25,6 +29,7 @@ final class PayloadNormalizer
             $value instanceof DateTimeInterface => $value->format(DATE_ATOM),
             $value instanceof Closure => ['class' => Closure::class],
             is_resource($value) => ['class' => 'resource'],
+            $value instanceof IlluminateUploadedFile || $value instanceof SymfonyUploadedFile => $this->uploadedFiles->normalize($value)->data,
             $value instanceof File => $this->normalizeFile($value),
             is_array($value) => $this->normalizeArray($value),
             $value instanceof Arrayable => $this->normalize($value->toArray()),
@@ -58,6 +63,10 @@ final class PayloadNormalizer
     {
         if ($value instanceof Closure || is_resource($value)) {
             return true;
+        }
+
+        if ($value instanceof IlluminateUploadedFile || $value instanceof SymfonyUploadedFile) {
+            return ! $this->uploadedFiles->normalize($value)->stable;
         }
 
         if ($value instanceof File) {

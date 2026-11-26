@@ -15,6 +15,13 @@ return [
         'context' => true,
     ],
 
+    'attachments' => [
+        'remote' => [
+            'mode' => 'never',
+            'hasher' => null,
+        ],
+    ],
+
     'redactor' => null,
 
     'context' => [

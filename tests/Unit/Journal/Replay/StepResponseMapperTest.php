@@ -3,6 +3,7 @@
 namespace Goodport\AiJournal\Tests\Unit\Journal\Replay;
 
 use Goodport\AiJournal\Journal\Recording\PayloadNormalizer;
+use Goodport\AiJournal\Journal\Recording\UploadedFileNormalizer;
 use Goodport\AiJournal\Journal\Replay\StepResponseMapper;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Gateway\StepResponse;
@@ -16,7 +17,7 @@ final class StepResponseMapperTest extends TestCase
 {
     public function test_replay_safe_response_roundtrips(): void
     {
-        $mapper = new StepResponseMapper(new PayloadNormalizer);
+        $mapper = new StepResponseMapper(new PayloadNormalizer(new UploadedFileNormalizer));
         $response = $this->response();
 
         $data = $mapper->toArray($response);
@@ -32,7 +33,7 @@ final class StepResponseMapperTest extends TestCase
 
     public function test_tool_calls_and_approvals_are_not_replay_safe(): void
     {
-        $mapper = new StepResponseMapper(new PayloadNormalizer);
+        $mapper = new StepResponseMapper(new PayloadNormalizer(new UploadedFileNormalizer));
 
         $withTool = $this->response(toolCalls: [new ToolCall('tool-id', 'example_tool', [])]);
 

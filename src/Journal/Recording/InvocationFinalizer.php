@@ -7,6 +7,7 @@ use Goodport\AiJournal\Enums\InvocationStatus;
 use Goodport\AiJournal\Enums\StepStatus;
 use Goodport\AiJournal\Journal\Config\JournalConfig;
 use Goodport\AiJournal\Journal\Cost\CostCalculator;
+use Goodport\AiJournal\Journal\Errors\ErrorMetadataExtractor;
 use Goodport\AiJournal\Journal\Redaction\PayloadRedactor;
 use Goodport\AiJournal\Models\AiInvocation;
 use Laravel\Ai\Responses\AgentResponse;
@@ -21,6 +22,7 @@ final class InvocationFinalizer
         private PayloadRedactor $redactor,
         private CostCalculator $costs,
         private AttemptTracker $attempts,
+        private ErrorMetadataExtractor $errors,
     ) {}
 
     public function succeed(
@@ -37,6 +39,13 @@ final class InvocationFinalizer
         $invocation->finished_at = $finishedAt;
         $invocation->duration_ms = $this->duration($invocation->started_at, $finishedAt);
         $invocation->conversation_id = $response->conversationId;
+        $invocation->error_class = null;
+        $invocation->error_message = null;
+        $invocation->error_code = null;
+        $invocation->http_status = null;
+        $invocation->provider_request_id = null;
+        $invocation->retry_after = null;
+        $invocation->error_details = null;
 
         if ($this->config->captureResponse) {
             $invocation->response_text = $this->redactor->redactString($response->text);
@@ -85,12 +94,19 @@ final class InvocationFinalizer
         $invocation->duration_ms = $this->duration($invocation->started_at, $finishedAt);
         $invocation->error_class = $exception::class;
         $invocation->error_message = $this->redactor->redactString($exception->getMessage());
+        $error = $this->errors->extract($exception);
+        $invocation->error_code = $error->errorCode;
+        $invocation->http_status = $error->httpStatus;
+        $invocation->provider_request_id = $error->providerRequestId;
+        $invocation->retry_after = $error->retryAfter;
+        $invocation->error_details = $error->details;
 
         $this->attempts->fail(
             $invocation,
             $attempt,
             $exception::class,
             $this->redactor->redactString($exception->getMessage()),
+            $error,
             $finishedAt,
         );
         $invocation->save();

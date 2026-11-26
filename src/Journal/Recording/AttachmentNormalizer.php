@@ -2,13 +2,22 @@
 
 namespace Goodport\AiJournal\Journal\Recording;
 
+use Goodport\AiJournal\Journal\Attachments\RemoteAttachmentHasher;
+use Goodport\AiJournal\Journal\Config\JournalConfig;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Http\UploadedFile as IlluminateUploadedFile;
 use JsonSerializable;
 use Laravel\Ai\Files\File;
+use Symfony\Component\HttpFoundation\File\UploadedFile as SymfonyUploadedFile;
+use Throwable;
 
 final class AttachmentNormalizer
 {
-    public function __construct(private PayloadNormalizer $normalizer) {}
+    public function __construct(
+        private PayloadNormalizer $normalizer,
+        private UploadedFileNormalizer $uploadedFiles,
+        private ?JournalConfig $config = null,
+    ) {}
 
     /**
      * Normalize an attachment into metadata without binary content.
@@ -17,6 +26,10 @@ final class AttachmentNormalizer
     {
         if ($attachment === null) {
             return new NormalizedPayload([], true);
+        }
+
+        if ($attachment instanceof IlluminateUploadedFile || $attachment instanceof SymfonyUploadedFile) {
+            return $this->uploadedFiles->normalize($attachment);
         }
 
         if ($attachment instanceof File) {
@@ -48,6 +61,11 @@ final class AttachmentNormalizer
     private function normalizeArray(array $data): NormalizedPayload
     {
         $type = is_string($data['type'] ?? null) ? $data['type'] : null;
+
+        if ($this->isRemote($data, $type)) {
+            return $this->normalizeRemote($data);
+        }
+
         $stable = $this->hasStableReference($data, $type);
 
         if (isset($data['base64'])) {
@@ -56,6 +74,43 @@ final class AttachmentNormalizer
         }
 
         return new NormalizedPayload($data, $stable);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $data
+     */
+    private function normalizeRemote(array $data): NormalizedPayload
+    {
+        $url = $data['url'] ?? null;
+
+        if (! is_string($url) || $url === '') {
+            return new NormalizedPayload($data, false);
+        }
+
+        $mode = $this->config?->remoteAttachmentMode ?? 'never';
+
+        if ($mode === 'trust') {
+            return new NormalizedPayload($data, true);
+        }
+
+        if ($mode !== 'hash') {
+            return new NormalizedPayload($data, false);
+        }
+
+        try {
+            $hasher = app($this->config->remoteAttachmentHasher);
+            $hash = $hasher instanceof RemoteAttachmentHasher ? $hasher->hash($url) : null;
+        } catch (Throwable) {
+            $hash = null;
+        }
+
+        if (! is_string($hash) || $hash === '') {
+            return new NormalizedPayload($data, false);
+        }
+
+        $data['sha256'] = $hash;
+
+        return new NormalizedPayload($data, true);
     }
 
     private function normalizeFile(File $file): NormalizedPayload
@@ -77,6 +132,10 @@ final class AttachmentNormalizer
             unset($data['base64']);
         }
 
+        if ($this->isRemote($data, $type)) {
+            return $this->normalizeRemote($data);
+        }
+
         if ($type !== null && str_starts_with($type, 'local-') && isset($data['path']) && is_string($data['path']) && is_readable($data['path'])) {
             $hash = hash_file('sha256', $data['path']);
 
@@ -94,15 +153,21 @@ final class AttachmentNormalizer
     /**
      * @param  array<array-key, mixed>  $data
      */
+    private function isRemote(array $data, ?string $type): bool
+    {
+        return is_string($data['url'] ?? null)
+            && ($type === null || str_starts_with($type, 'remote-'));
+    }
+
     private function hasStableReference(array $data, ?string $type): bool
     {
-        foreach (['url', 'id', 'hash', 'base64_hash'] as $key) {
+        foreach (['id', 'hash', 'sha256', 'base64_hash'] as $key) {
             if (isset($data[$key]) && is_string($data[$key]) && $data[$key] !== '') {
                 return true;
             }
         }
 
-        if ($type !== null && (str_starts_with($type, 'remote-') || str_starts_with($type, 's3-') || str_starts_with($type, 'provider-'))) {
+        if ($type !== null && (str_starts_with($type, 's3-') || str_starts_with($type, 'provider-'))) {
             return true;
         }
 

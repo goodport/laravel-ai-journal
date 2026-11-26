@@ -4,6 +4,7 @@ namespace Goodport\AiJournal\Journal\Recording;
 
 use DateTimeInterface;
 use Goodport\AiJournal\Enums\AttemptStatus;
+use Goodport\AiJournal\Journal\Errors\ErrorMetadata;
 use Goodport\AiJournal\Models\AiInvocation;
 
 final class AttemptTracker
@@ -21,6 +22,8 @@ final class AttemptTracker
             'model' => $model,
             'status' => AttemptStatus::Pending->value,
             'started_at' => $at->format(DATE_ATOM),
+            'finished_at' => null,
+            ...$this->emptyErrorFields(),
         ]];
     }
 
@@ -37,6 +40,8 @@ final class AttemptTracker
             'model' => $model,
             'status' => AttemptStatus::Pending->value,
             'started_at' => $at->format(DATE_ATOM),
+            'finished_at' => null,
+            ...$this->emptyErrorFields(),
         ]);
 
         $this->registry->set((string) $invocation->invocation_id, $attempt);
@@ -66,6 +71,7 @@ final class AttemptTracker
             'provider' => $provider,
             'model' => $model,
             'finished_at' => $at->format(DATE_ATOM),
+            ...$this->emptyErrorFields(),
         ]);
         $invocation->attempt_count = max((int) $invocation->attempt_count, $attempt);
     }
@@ -75,6 +81,7 @@ final class AttemptTracker
         int $attempt,
         string $errorClass,
         string $errorMessage,
+        ErrorMetadata $error,
         DateTimeInterface $at,
     ): void {
         $invocation->attempts = $this->mark($invocation->attempts ?? [], $attempt, [
@@ -82,6 +89,7 @@ final class AttemptTracker
             'error_class' => $errorClass,
             'error_message' => $errorMessage,
             'finished_at' => $at->format(DATE_ATOM),
+            ...$this->errorFields($error),
         ]);
         $invocation->attempt_count = max((int) $invocation->attempt_count, $attempt);
     }
@@ -93,6 +101,7 @@ final class AttemptTracker
         string $model,
         string $errorClass,
         string $errorMessage,
+        ErrorMetadata $error,
         DateTimeInterface $at,
     ): void {
         $invocation->attempts = $this->mark($invocation->attempts ?? [], $attempt, [
@@ -102,6 +111,7 @@ final class AttemptTracker
             'error_class' => $errorClass,
             'error_message' => $errorMessage,
             'finished_at' => $at->format(DATE_ATOM),
+            ...$this->errorFields($error),
         ]);
         $invocation->attempt_count = max((int) $invocation->attempt_count, $attempt);
     }
@@ -109,6 +119,36 @@ final class AttemptTracker
     public function forget(AiInvocation $invocation): void
     {
         $this->registry->forget((string) $invocation->invocation_id);
+    }
+
+    /**
+     * @return array<string, null>
+     */
+    private function emptyErrorFields(): array
+    {
+        return [
+            'error_class' => null,
+            'error_message' => null,
+            'error_code' => null,
+            'http_status' => null,
+            'provider_request_id' => null,
+            'retry_after' => null,
+            'error_details' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function errorFields(ErrorMetadata $error): array
+    {
+        return [
+            'error_code' => $error->errorCode,
+            'http_status' => $error->httpStatus,
+            'provider_request_id' => $error->providerRequestId,
+            'retry_after' => $error->retryAfter,
+            'error_details' => $error->details,
+        ];
     }
 
     /**

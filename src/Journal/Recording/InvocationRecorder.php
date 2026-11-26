@@ -3,6 +3,7 @@
 namespace Goodport\AiJournal\Journal\Recording;
 
 use Goodport\AiJournal\Enums\InvocationStatus;
+use Goodport\AiJournal\Journal\Errors\ErrorMetadataExtractor;
 use Goodport\AiJournal\Journal\Redaction\PayloadRedactor;
 use Goodport\AiJournal\Models\AiInvocation;
 use Laravel\Ai\Contracts\Agent;
@@ -22,6 +23,7 @@ final class InvocationRecorder
         private AttemptTracker $attempts,
         private InvocationFinalizer $finalizer,
         private PayloadRedactor $redactor,
+        private ErrorMetadataExtractor $errors,
     ) {}
 
     public function start(PromptingAgent|StreamingAgent $event): void
@@ -55,6 +57,11 @@ final class InvocationRecorder
         $invocation->finished_at = null;
         $invocation->error_class = null;
         $invocation->error_message = null;
+        $invocation->error_code = null;
+        $invocation->http_status = null;
+        $invocation->provider_request_id = null;
+        $invocation->retry_after = null;
+        $invocation->error_details = null;
         $invocation->save();
     }
 
@@ -102,6 +109,7 @@ final class InvocationRecorder
             $event->model,
             $event->exception::class,
             $this->redactor->redactString($event->exception->getMessage()),
+            $this->errors->extract($event->exception),
             $finishedAt,
         );
         $invocation->save();

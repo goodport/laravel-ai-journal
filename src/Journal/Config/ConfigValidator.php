@@ -2,6 +2,7 @@
 
 namespace Goodport\AiJournal\Journal\Config;
 
+use Goodport\AiJournal\Journal\Attachments\RemoteAttachmentHasher;
 use Goodport\AiJournal\Journal\Redaction\Redactor;
 use Goodport\AiJournal\Journal\Replay\ReplayScope;
 use Illuminate\Contracts\Config\Repository;
@@ -31,6 +32,22 @@ final class ConfigValidator
 
         if (! in_array($attachments, ['none', 'metadata'], true)) {
             throw $this->invalid('capture.attachments', 'one of: none, metadata');
+        }
+
+        $remoteMode = $this->string('attachments.remote.mode');
+
+        if (! in_array($remoteMode, ['never', 'hash', 'trust'], true)) {
+            throw $this->invalid('attachments.remote.mode', 'one of: never, hash, trust');
+        }
+
+        $remoteHasher = $this->nullableString('attachments.remote.hasher');
+
+        if ($remoteHasher !== null && (! class_exists($remoteHasher) || ! is_subclass_of($remoteHasher, RemoteAttachmentHasher::class))) {
+            throw $this->invalid('attachments.remote.hasher', 'null or a class-string implementing '.RemoteAttachmentHasher::class);
+        }
+
+        if ($remoteMode === 'hash' && $remoteHasher === null) {
+            throw $this->invalid('attachments.remote.hasher', 'required when attachments.remote.mode is hash');
         }
 
         $fingerprintContext = $this->stringArray('replay.fingerprint_context');
@@ -65,6 +82,8 @@ final class ConfigValidator
             captureStepRequest: $this->boolean('capture.step_request'),
             captureAttachments: $attachments,
             captureContext: $this->boolean('capture.context'),
+            remoteAttachmentMode: $remoteMode,
+            remoteAttachmentHasher: $remoteHasher,
             redactor: $redactor,
             traceKey: $this->string('context.trace'),
             scopeKey: $this->string('context.scope'),

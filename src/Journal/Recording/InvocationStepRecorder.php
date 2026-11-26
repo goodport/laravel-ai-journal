@@ -5,6 +5,7 @@ namespace Goodport\AiJournal\Journal\Recording;
 use Goodport\AiJournal\Enums\StepStatus;
 use Goodport\AiJournal\Journal\Config\JournalConfig;
 use Goodport\AiJournal\Journal\Cost\CostCalculator;
+use Goodport\AiJournal\Journal\Errors\ErrorMetadataExtractor;
 use Goodport\AiJournal\Journal\Redaction\PayloadRedactor;
 use Goodport\AiJournal\Journal\Replay\StepFingerprint;
 use Goodport\AiJournal\Journal\Replay\StepPayload;
@@ -30,6 +31,7 @@ final class InvocationStepRecorder
         private PayloadNormalizer $normalizer,
         private PayloadRedactor $redactor,
         private CostCalculator $costs,
+        private ErrorMetadataExtractor $errors,
     ) {}
 
     public function start(StartingStep $event): void
@@ -57,6 +59,11 @@ final class InvocationStepRecorder
         $step->duration_ms = null;
         $step->error_class = null;
         $step->error_message = null;
+        $step->error_code = null;
+        $step->http_status = null;
+        $step->provider_request_id = null;
+        $step->retry_after = null;
+        $step->error_details = null;
         $step->replay_of_step_id = null;
         $step->save();
     }
@@ -88,6 +95,11 @@ final class InvocationStepRecorder
         $step->duration_ms = (int) round($event->time);
         $step->error_class = null;
         $step->error_message = null;
+        $step->error_code = null;
+        $step->http_status = null;
+        $step->provider_request_id = null;
+        $step->retry_after = null;
+        $step->error_details = null;
         $step->save();
     }
 
@@ -110,6 +122,12 @@ final class InvocationStepRecorder
         $step->model = $event->model;
         $step->error_class = $event->exception::class;
         $step->error_message = $this->redactor->redactString($event->exception->getMessage());
+        $error = $this->errors->extract($event->exception);
+        $step->error_code = $error->errorCode;
+        $step->http_status = $error->httpStatus;
+        $step->provider_request_id = $error->providerRequestId;
+        $step->retry_after = $error->retryAfter;
+        $step->error_details = $error->details;
         $step->duration_ms = (int) round($event->time);
         $step->save();
     }
@@ -144,6 +162,11 @@ final class InvocationStepRecorder
         $step->duration_ms = $durationMs;
         $step->error_class = null;
         $step->error_message = null;
+        $step->error_code = null;
+        $step->http_status = null;
+        $step->provider_request_id = null;
+        $step->retry_after = null;
+        $step->error_details = null;
         $step->replay_of_step_id = $source->id;
         $step->save();
 

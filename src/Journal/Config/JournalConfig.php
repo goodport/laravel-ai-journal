@@ -16,6 +16,8 @@ final readonly class JournalConfig
         public bool $captureStepRequest,
         public string $captureAttachments,
         public bool $captureContext,
+        public string $remoteAttachmentMode,
+        public ?string $remoteAttachmentHasher,
         public ?string $redactor,
         public string $traceKey,
         public string $scopeKey,

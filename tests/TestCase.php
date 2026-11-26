@@ -30,6 +30,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Mockery;
 use Orchestra\Testbench\TestCase as Orchestra;
+use Throwable;
 
 abstract class TestCase extends Orchestra
 {
@@ -153,7 +154,7 @@ abstract class TestCase extends Orchestra
         event(new AgentPrompted($invocationId, $prompt, $this->agentResponse($invocationId)));
     }
 
-    protected function dispatchFailedStep(string $invocationId, AgentPrompt $prompt): void
+    protected function dispatchFailedStep(string $invocationId, AgentPrompt $prompt, ?Throwable $exception = null): void
     {
         event($this->startingStep($invocationId, $prompt));
         event(new StepFailed(
@@ -163,14 +164,14 @@ abstract class TestCase extends Orchestra
             provider: $prompt->provider,
             model: $prompt->model,
             isFinalStep: true,
-            exception: new \RuntimeException('Provider failed'),
+            exception: $exception ?? new \RuntimeException('Provider failed'),
             time: 8.0,
         ));
     }
 
-    protected function dispatchFailed(string $invocationId, AgentPrompt $prompt): void
+    protected function dispatchFailed(string $invocationId, AgentPrompt $prompt, ?Throwable $exception = null): void
     {
-        event(new AgentFailed($invocationId, $prompt, new \RuntimeException('Provider failed')));
+        event(new AgentFailed($invocationId, $prompt, $exception ?? new \RuntimeException('Provider failed')));
     }
 
     protected function pendingStep(string $invocationId, ?AnonymousAgent $agent = null, array $tools = []): PendingStep

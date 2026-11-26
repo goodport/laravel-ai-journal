@@ -44,6 +44,7 @@ An invocation can contain several attempts because `laravel/ai` keeps the same i
 Recorded fields include:
 
 - the agent class, provider, model, and status;
+- machine-readable error metadata: `error_code`, `http_status`, `provider_request_id`, `retry_after`, and redacted `error_details`;
 - the original prompt and response;
 - structured output, when present;
 - usage and calculated cost;
@@ -52,18 +53,25 @@ Recorded fields include:
 - the raw step response needed for safe replay;
 - trace ID, scope, tags, and a snapshot of Laravel `Context`.
 
-Binary attachments are not stored. Attachment metadata contains a name, MIME type, size, URL, provider ID, or content hash. A local or base64 file is hashed so the same file can be recognized later.
+Binary attachments are not stored. Attachment metadata contains a name, MIME type, size, URL, provider ID, or content hash. A local file, base64 file, or uploaded file is hashed so the same content can be recognized later. For `UploadedFile`, the journal stores `original_name`, `mime`, `size`, and `sha256`; temporary paths and binary contents are never stored.
 
 ## Reading the Journal
 
-Use the facade for common lookups:
+Use the facade for common lookups and a paged admin list:
 
 ```php
 use Goodport\AiJournal\Facades\AiJournal;
 
 $invocation = AiJournal::invocation($invocationId);
 $invocations = AiJournal::trace($traceId);
+$page = AiJournal::invocations([
+    'agent' => PostModerationAgent::class,
+    'status' => 'failed',
+    'error_code' => 'rate_limited',
+], perPage: 25);
 ```
+
+The list supports `agent`, `provider`, `model`, `status`, `scope`, `trace_id`, `error_code`, `from`, and `to`. It returns a paginator with selected summary columns only; `prompt`, `response_text`, `structured`, and other heavy payloads are not loaded.
 
 Models are public and can be queried directly:
 
@@ -133,6 +141,8 @@ public function middleware(): array
 
 When a matching successful step exists within the TTL and scope, the middleware returns its `StepResponse` and no provider call is made. The new step is stored as `replayed` and links to the original through `replay_of_step_id`.
 
+`ReplayRecordedStep` must be the first middleware. Any middleware that can return a response without calling the provider must run before a rate limiter, so replay never waits or consumes a limit.
+
 Replay is deliberately conservative:
 
 - only successful steps;
@@ -164,6 +174,25 @@ Context::add('ai.journal.fresh', true);
 ```
 
 `ai.journal.ttl` overrides the configured TTL for the current call.
+
+## Remote attachments
+
+Replay of remote URLs is disabled by default because the same URL can point to different content later:
+
+```php
+'attachments' => [
+    'remote' => [
+        'mode' => 'never', // never | hash | trust
+        'hasher' => null,
+    ],
+],
+```
+
+- `never` keeps the URL metadata but marks the attachment unstable, so replay is skipped.
+- `hash` requires a class implementing `Goodport\AiJournal\Journal\Attachments\RemoteAttachmentHasher`.
+- `trust` trusts the URL and must be enabled explicitly.
+
+The hasher is application-owned, so the journal does not depend on a storage driver. Its implementation must enforce an explicit timeout, a maximum download size, and preferably an allowed-host list. If hashing fails, the attachment is unstable and replay is skipped. A missing hasher with `hash` mode is a configuration error.
 
 ## Cost
 
@@ -228,6 +257,8 @@ Disable individual capture groups when text is not needed:
 ```
 
 Disabling responses also disables replay.
+
+HTTP error details are stored without request headers, cookies, authorization values, API keys, tokens, or passwords.
 
 ## Pruning
 

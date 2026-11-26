@@ -36,6 +36,9 @@ final class AiInvocation extends Model
             'attempts' => 'array',
             'context' => 'array',
             'tags' => 'array',
+            'http_status' => 'integer',
+            'retry_after' => 'integer',
+            'error_details' => 'array',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];
