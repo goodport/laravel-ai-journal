@@ -15,16 +15,20 @@ use Throwable;
 
 final class ReplayRecordedStep
 {
+    private ContextReader $context;
+
     public function __construct(
         private JournalConfig $config,
-        private ContextReader $context,
         private StepPayloadFactory $payloads,
         private StepFingerprint $fingerprints,
         private StepResponseMapper $mapper,
         private ReplayScope $scope,
         private InvocationRecorder $invocations,
         private InvocationStepRecorder $steps,
-    ) {}
+        ?ContextReader $context = null,
+    ) {
+        $this->context = $context ?? app(ContextReader::class);
+    }
 
     public function handle(PendingStep $step, Closure $next): mixed
     {
